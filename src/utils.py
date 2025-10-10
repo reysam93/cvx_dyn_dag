@@ -531,7 +531,7 @@ def plot_all_metrics(shd, fs_W, err_W, fs_A, err_A, acyc, runtime, dag_count, x_
     plot_data(axes[0], err_W, exps, x_vals, xlabel, 'Fro Error W', skip_idx, agg=agg,
               deviation=dev, alpha=alpha, plot_func='loglog')
     plot_data(axes[1], err_A, exps, x_vals, xlabel, 'Fro Error A', skip_idx, agg=agg,
-              deviation=dev)
+              deviation=dev, plot_func='loglog')
     plot_data(axes[2], runtime, exps, x_vals, xlabel, 'Running time (seconds)',
               skip_idx, agg=agg, deviation=dev, alpha=alpha, plot_func='loglog')
     plot_data(axes[3], dag_count, exps, x_vals, xlabel, 'Graph is DAG', skip_idx,
