@@ -517,7 +517,7 @@ def plot_data(axes, data, exps, x_vals, xlabel, ylabel, skip_idx=[], agg='mean',
 def plot_all_metrics(shd, fs_W, err_W, fs_A, err_A, acyc, runtime, dag_count, x_vals, exps, 
                      agg='mean', skip_idx=[], dev=False, alpha=.25, xlabel='Number of samples'):
     fig, axes = plt.subplots(1, 4, figsize=(16, 4))
-    plot_data(axes[0], shd, exps, x_vals, xlabel, 'SDH-W', skip_idx,
+    plot_data(axes[0], shd, exps, x_vals, xlabel, 'SHD-W', skip_idx,
               agg=agg, deviation=dev, alpha=alpha)
     plot_data(axes[1], fs_W, exps, x_vals, xlabel, 'F1-W', skip_idx,
               agg=agg, deviation=dev, alpha=alpha)
@@ -550,3 +550,95 @@ def data_to_csv(fname, models, xaxis, error, agg='mean', dev='std'):
 
     np.savetxt(fname, data, delimiter=';', header=header, comments='')
     print('SAVED as:', fname)
+
+
+def _aggregate(data, agg):
+    """
+    Compute aggregated statistics (mean/median, std, percentiles) along the first axis.
+    """
+    if agg == 'median':
+        agg_data = np.median(data, axis=0)
+    else:
+        agg_data = np.mean(data, axis=0)
+
+    stats = {
+        'agg': agg_data,
+        'std': np.std(data, axis=0),
+        'p25': np.percentile(data, 25, axis=0),
+        'p75': np.percentile(data, 75, axis=0),
+    }
+    return stats
+
+
+def _apply_linestyle(fmt, ls):
+    """
+    Replace the leading linestyle part of a matplotlib fmt string with `ls`,
+    while keeping the marker (and any trailing chars) intact.
+
+    Examples:
+      fmt='-o'  -> with ls='-'  -> '-o'
+      fmt='-o'  -> with ls='--' -> '--o'
+      fmt='--x' -> with ls='-'  -> '-x'
+      fmt=':s'  -> with ls='--' -> '--s'
+      fmt='o'   -> with ls='--' -> '--o'
+    """
+    i = 0
+    while i < len(fmt) and fmt[i] in ['-', ':', '.']:
+        i += 1
+    # fmt[i:] now holds marker/etc. Prepend desired linestyle.
+    return ls + fmt[i:]
+
+
+def plot_merged_data(axes, data_W, data_A, exps, x_vals, xlabel, ylabel, skip_idx=[],
+                     agg='mean', deviation=None, alpha=.25, plot_func='semilogx'):
+    """
+    Plot aggregated results for W (solid line) and A (dashed line) on the same axes.
+    The marker is taken from each experiment's 'fmt'.
+    """
+
+    # Aggregate W and A results separately
+    stats_W = _aggregate(data_W, agg)
+    stats_A = _aggregate(data_A, agg)
+
+    # Get plotting function dynamically
+    plot_fn = getattr(axes, plot_func)
+
+    for i, exp in enumerate(exps):
+        if i in skip_idx:
+            continue
+
+        base_fmt = exp.get('fmt', '-')
+
+        # ---- W: solid line ----
+        fmt_W = _apply_linestyle(base_fmt, '-')
+        line_W, = plot_fn(x_vals, stats_W['agg'][:, i], fmt_W,
+                          label=f"{exp.get('leg', f'Exp {i}')} W")
+
+        if deviation == 'prctile':
+            up_ci = stats_W['p75'][:, i]
+            low_ci = stats_W['p25'][:, i]
+            axes.fill_between(x_vals, low_ci, up_ci, alpha=alpha, color=line_W.get_color())
+        elif deviation == 'std':
+            up_ci = stats_W['agg'][:, i] + stats_W['std'][:, i]
+            low_ci = np.maximum(stats_W['agg'][:, i] - stats_W['std'][:, i], 0)
+            axes.fill_between(x_vals, low_ci, up_ci, alpha=alpha, color=line_W.get_color())
+
+        # ---- A: dashed line ----
+        fmt_A = _apply_linestyle(base_fmt, '--')
+        line_A, = plot_fn(x_vals, stats_A['agg'][:, i], fmt_A,
+                          label=f"{exp.get('leg', f'Exp {i}')} A",
+                          color=line_W.get_color())  # opcional: mismo color que W
+
+        if deviation == 'prctile':
+            up_ci = stats_A['p75'][:, i]
+            low_ci = stats_A['p25'][:, i]
+            axes.fill_between(x_vals, low_ci, up_ci, alpha=alpha, color=line_A.get_color())
+        elif deviation == 'std':
+            up_ci = stats_A['agg'][:, i] + stats_A['std'][:, i]
+            low_ci = np.maximum(stats_A['agg'][:, i] - stats_A['std'][:, i], 0)
+            axes.fill_between(x_vals, low_ci, up_ci, alpha=alpha, color=line_A.get_color())
+
+    axes.set_xlabel(xlabel)
+    axes.set_ylabel(ylabel)
+    axes.grid(True)
+    axes.legend()
